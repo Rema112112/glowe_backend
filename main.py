@@ -6,10 +6,18 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-load_dotenv()
+# Only load .env file if it exists locally (prevents overriding Railway variables in production)
+if os.path.exists(".env"):
+    load_dotenv()
+
 app = FastAPI()
 
+# Retrieve and validate the API key
 gemini_key = os.getenv("GEMINI_API_KEY")
+
+if not gemini_key:
+    raise ValueError("❌ GEMINI_API_KEY is missing! Check your Railway Variables tab.")
+
 client = genai.Client(api_key=gemini_key)
 
 # استخدام الموديل الأحدث والأكثر استقراراً مباشرة
