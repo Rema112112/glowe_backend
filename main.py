@@ -11,19 +11,27 @@ if os.path.exists(".env"):
 
 app = FastAPI()
 
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    raise ValueError("❌ OPENAI_API_KEY is missing! Check your Railway Variables tab.")
+# Retrieve Groq API Key from environment variables
+groq_key = os.getenv("GROQ_API_KEY")
 
-client = OpenAI(api_key=api_key)
-MODEL_NAME = "gpt-4o-mini"
+if not groq_key:
+    raise ValueError("❌ GROQ_API_KEY is missing! Check your Railway Variables tab.")
+
+# Initialize OpenAI client configured for Groq's LPU endpoint
+client = OpenAI(
+    api_key=groq_key,
+    base_url="https://api.groq.com/openai/v1"
+)
+
+# Groq multimodal vision model
+MODEL_NAME = "llama-3.2-11b-vision-instruct"
 
 class PromptRequest(BaseModel):
     prompt: str
 
 SYSTEM_INSTRUCTION = """
 Analyze these skincare ingredients, product name, or barcode number.
-Return ONLY a valid JSON object matching this exact schema:
+Return ONLY a valid JSON object matching this exact schema, with no markdown code blocks or extra text:
 {
   "productName": "Recognized Product Name",
   "compatibilityScore": 88,
@@ -50,7 +58,7 @@ SKIN_SYSTEM_INSTRUCTION = """
 You are an expert dermatologist. Analyze the user's face image and evaluate 6 conditions: Acne, Redness, Dryness, Pores, Hyperpigmentation, Texture.
 Provide an explanation of the skin condition, and a 5-step routine: Cleanser, Toner, Serum, Moisturizer, Sunscreen.
 
-Return ONLY a valid JSON object matching this exact schema:
+Return ONLY a valid JSON object matching this exact schema, with no markdown code blocks or extra text:
 {
   "skinAnalysisExplanation": "Detailed explanation of skin condition.",
   "detectedConditions": {
@@ -73,12 +81,13 @@ Return ONLY a valid JSON object matching this exact schema:
 
 @app.get("/")
 def root():
-    return {"message": "Glowe backend is running"}
+    return {"message": "Glowe Groq backend is running"}
 
 @app.post("/analyze")
 def analyze_text(request: PromptRequest):
     try:
         user_input = request.prompt.strip()
+        
         if user_input.isdigit():
             user_prompt = f"Barcode EAN/UPC: {user_input}. Identify this exact cosmetic product."
         else:
