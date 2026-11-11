@@ -23,7 +23,7 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
-# Updated Groq multimodal vision model
+# Groq multimodal vision model
 MODEL_NAME = "qwen/qwen3.8-27b"
 
 class PromptRequest(BaseModel):
@@ -56,25 +56,45 @@ Note: 'status' MUST be exactly one of: 'Safe', 'Caution', or 'Harmful'.
 
 SKIN_SYSTEM_INSTRUCTION = """
 You are an expert dermatologist. Analyze the user's face image and evaluate 6 conditions: Acne, Redness, Dryness, Pores, Hyperpigmentation, Texture.
-Provide an explanation of the skin condition, and a 5-step routine: Cleanser, Toner, Serum, Moisturizer, Sunscreen.
+You MUST provide a comprehensive explanation of the skin condition (noting if it's oily, dry, showing rashes, etc.) AND fully populate a tailored 5-step routine with specific product types, reasons, and active key ingredients for: Cleanser, Toner, Serum, Moisturizer, and Sunscreen.
 
 Return ONLY a valid JSON object matching this exact schema, with no markdown code blocks or extra text:
 {
-  "skinAnalysisExplanation": "Detailed explanation of skin condition.",
+  "skinAnalysisExplanation": "Detailed explanation of skin condition, noting dryness, oiliness, rashes or irritation.",
   "detectedConditions": {
-    "acne": "Status",
-    "redness": "Status",
-    "dryness": "Status",
-    "pores": "Status",
-    "hyperpigmentation": "Status",
-    "texture": "Status"
+    "acne": "Status or Severity",
+    "redness": "Status or Severity",
+    "dryness": "Status or Severity",
+    "pores": "Status or Severity",
+    "hyperpigmentation": "Status or Severity",
+    "texture": "Status or Severity"
   },
   "routineRecommendations": {
-    "cleanser": {"productTypeName": "Type", "reason": "Reason", "keyIngredients": ["Ing1"]},
-    "toner": {"productTypeName": "Type", "reason": "Reason", "keyIngredients": ["Ing1"]},
-    "serum": {"productTypeName": "Type", "reason": "Reason", "keyIngredients": ["Ing1"]},
-    "moisturizer": {"productTypeName": "Type", "reason": "Reason", "keyIngredients": ["Ing1"]},
-    "sunscreen": {"productTypeName": "Type", "reason": "Reason", "keyIngredients": ["Ing1"]}
+    "cleanser": {
+      "productTypeName": "Specific Cleanser Type (e.g., Gentle Hydrating Cleanser)", 
+      "reason": "Why this is chosen based on detected conditions", 
+      "keyIngredients": ["Ceramides", "Glycerin"]
+    },
+    "toner": {
+      "productTypeName": "Specific Toner Type", 
+      "reason": "Why this is chosen", 
+      "keyIngredients": ["Ingredient 1"]
+    },
+    "serum": {
+      "productTypeName": "Specific Serum Type", 
+      "reason": "Why this is chosen", 
+      "keyIngredients": ["Ingredient 1"]
+    },
+    "moisturizer": {
+      "productTypeName": "Specific Moisturizer Type", 
+      "reason": "Why this is chosen", 
+      "keyIngredients": ["Ingredient 1"]
+    },
+    "sunscreen": {
+      "productTypeName": "Specific Sunscreen Type", 
+      "reason": "Why this is chosen", 
+      "keyIngredients": ["Zinc Oxide"]
+    }
   }
 }
 """
@@ -101,6 +121,7 @@ def analyze_text(request: PromptRequest):
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.2,
+            max_completion_tokens=1000,
         )
 
         return json.loads(response.choices[0].message.content)
@@ -123,7 +144,7 @@ async def analyze_skin(file: UploadFile = File(...)):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Analyze this skin image and generate the evaluation JSON."},
+                        {"type": "text", "text": "Analyze this skin image, identify dryness/oiliness/rashes, and generate the full evaluation and routine recommendation JSON."},
                         {
                             "type": "image_url",
                             "image_url": {
@@ -134,6 +155,7 @@ async def analyze_skin(file: UploadFile = File(...)):
                 }
             ],
             temperature=0.2,
+            max_completion_tokens=1500,  # Increased token limit so routine fields don't cut off
         )
 
         return json.loads(response.choices[0].message.content)
