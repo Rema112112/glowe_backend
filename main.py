@@ -20,8 +20,8 @@ if not gemini_key:
 
 client = genai.Client(api_key=gemini_key)
 
-# استخدام الموديل الأحدث والأكثر استقراراً مباشرة
-MODEL_NAME = "gemini-3.8-flash"
+# Fixed: Use a valid, stable, and fast model name
+MODEL_NAME = "gemini-1.5-flash"
 
 class PromptRequest(BaseModel):
     prompt: str
@@ -95,7 +95,7 @@ def analyze_text(request: PromptRequest):
             contents=full_prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                max_output_tokens=4096
+                max_output_tokens=500
             )
         )
         
@@ -111,19 +111,24 @@ def analyze_text(request: PromptRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/analyze-skin")
-def analyze_skin(file: UploadFile = File(...)):
+async def analyze_skin(file: UploadFile = File(...)):
     try:
-        image_bytes = file.file.read()
+        image_bytes = await file.read()
+        
+        # Fallback MIME type if it's application/octet-stream or missing
+        mime_type = file.content_type
+        if not mime_type or mime_type == "application/octet-stream":
+            mime_type = "image/jpeg"
         
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type=file.content_type or "image/jpeg"),
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 SKIN_SYSTEM_INSTRUCTION
             ],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                max_output_tokens=1500
+                max_output_tokens=500
             )
         )
         
