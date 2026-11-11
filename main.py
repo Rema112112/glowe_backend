@@ -21,7 +21,7 @@ if not gemini_key:
 client = genai.Client(api_key=gemini_key)
 
 # Fixed: Use a valid, stable, and fast model name
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.8-flash"
 
 class PromptRequest(BaseModel):
     prompt: str
