@@ -23,8 +23,8 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
-# Groq multimodal vision model
-MODEL_NAME = "llama-3.2-11b-vision-instruct"
+# Updated Groq multimodal vision model
+MODEL_NAME = "qwen/qwen3.8-27b"
 
 class PromptRequest(BaseModel):
     prompt: str
