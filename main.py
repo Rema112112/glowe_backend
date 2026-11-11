@@ -71,7 +71,7 @@ Return ONLY a valid JSON object matching this exact schema, with no markdown cod
   },
   "routineRecommendations": {
     "cleanser": {
-      "productTypeName": "Specific Cleanser Type (e.g., Gentle Hydrating Cleanser)", 
+      "productTypeName": "Specific Cleanser Type", 
       "reason": "Why this is chosen based on detected conditions", 
       "keyIngredients": ["Ceramides", "Glycerin"]
     },
@@ -124,7 +124,38 @@ def analyze_text(request: PromptRequest):
             max_completion_tokens=1000,
         )
 
-        return json.loads(response.choices[0].message.content)
+        raw_text = response.choices[0].message.content.strip()
+        if raw_text.startswith("```json"): raw_text = raw_text[7:]
+        if raw_text.startswith("```"): raw_text = raw_text[3:]
+        if raw_text.endswith("```"): raw_text = raw_text[:-3]
+            
+        data = json.loads(raw_text.strip())
+
+        # Normalize keys for both camelCase and snake_case compatibility
+        prod_name = data.get("productName") or data.get("product_name") or "Unknown Product"
+        score = data.get("compatibilityScore") or data.get("compatibility_score") or 85
+        safe_sens = data.get("sensitiveSkinSafe") if "sensitiveSkinSafe" in data else data.get("sensitive_skin_safe", True)
+        sens_note = data.get("sensitiveSkinNote") or data.get("sensitive_skin_note") or ""
+        skin_types = data.get("suitableSkinTypes") or data.get("suitable_skin_types") or ["All Skin Types"]
+        preg_safe = data.get("pregnancySafe") if "pregnancySafe" in data else data.get("pregnancy_safe", True)
+        preg_note = data.get("pregnancyNote") or data.get("pregnancy_note") or ""
+        med_caution = data.get("medicationCaution") if "medicationCaution" in data else data.get("medication_caution", False)
+        med_note = data.get("medicationNote") or data.get("medication_note") or "None"
+        ingredients = data.get("ingredients") or []
+
+        return {
+            "productName": prod_name, "product_name": prod_name,
+            "compatibilityScore": score, "compatibility_score": score,
+            "sensitiveSkinSafe": safe_sens, "sensitive_skin_safe": safe_sens,
+            "sensitiveSkinNote": sens_note, "sensitive_skin_note": sens_note,
+            "suitableSkinTypes": skin_types, "suitable_skin_types": skin_types,
+            "pregnancySafe": preg_safe, "pregnancy_safe": preg_safe,
+            "pregnancyNote": preg_note, "pregnancy_note": preg_note,
+            "medicationCaution": med_caution, "medication_caution": med_caution,
+            "medicationNote": med_note, "medication_note": med_note,
+            "ingredients": ingredients
+        }
+        
     except Exception as e:
         print(f"Error in /analyze: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -155,10 +186,36 @@ async def analyze_skin(file: UploadFile = File(...)):
                 }
             ],
             temperature=0.2,
-            max_completion_tokens=1500,  # Increased token limit so routine fields don't cut off
+            max_completion_tokens=1500,
         )
 
-        return json.loads(response.choices[0].message.content)
+        raw_text = response.choices[0].message.content.strip()
+        if raw_text.startswith("```json"): raw_text = raw_text[7:]
+        if raw_text.startswith("```"): raw_text = raw_text[3:]
+        if raw_text.endswith("```"): raw_text = raw_text[:-3]
+            
+        data = json.loads(raw_text.strip())
+
+        # Normalize keys for both camelCase and snake_case compatibility
+        explanation = data.get("skinAnalysisExplanation") or data.get("skin_analysis_explanation") or data.get("explanation") or "Skin analysis completed successfully."
+        conditions = data.get("detectedConditions") or data.get("detected_conditions") or data.get("conditions") or {}
+        routine = data.get("routineRecommendations") or data.get("routine_recommendations") or data.get("recommendations") or data.get("routine") or {}
+
+        return {
+            "skinAnalysisExplanation": explanation,
+            "skin_analysis_explanation": explanation,
+            "explanation": explanation,
+            
+            "detectedConditions": conditions,
+            "detected_conditions": conditions,
+            "conditions": conditions,
+            
+            "routineRecommendations": routine,
+            "routine_recommendations": routine,
+            "recommendations": routine,
+            "routine": routine
+        }
+        
     except Exception as e:
         print(f"Error in /analyze-skin: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
