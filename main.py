@@ -1,27 +1,29 @@
 import os
 import json
+import base64
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
-# Only load .env file if it exists locally (prevents overriding Railway variables in production)
 if os.path.exists(".env"):
     load_dotenv()
 
 app = FastAPI()
 
-# Retrieve and validate the API key
-gemini_key = os.getenv("GEMINI_API_KEY")
+# Retrieve and validate DeepSeek API key
+deepseek_key = os.getenv("DEEPSEEK_API_KEY")
 
-if not gemini_key:
-    raise ValueError("❌ GEMINI_API_KEY is missing! Check your Railway Variables tab.")
+if not deepseek_key:
+    raise ValueError("❌ DEEPSEEK_API_KEY is missing! Check your Railway Variables tab.")
 
-client = genai.Client(api_key=gemini_key)
+# Initialize OpenAI client pointed at DeepSeek's endpoint
+client = OpenAI(
+    api_key=deepseek_key,
+    base_url="https://api.deepseek.com"
+)
 
-# Fixed: Use a valid, stable, and fast model name
-MODEL_NAME = "gemini-3.8-flash"
+MODEL_NAME = "deepseek-flash"
 
 class PromptRequest(BaseModel):
     prompt: str
@@ -78,7 +80,7 @@ Return ONLY a valid JSON object matching this exact schema, with no markdown cod
 
 @app.get("/")
 def root():
-    return {"message": "Glowe backend is running"}
+    return {"message": "Glowe DeepSeek backend is running"}
 
 @app.post("/analyze")
 def analyze_text(request: PromptRequest):
@@ -86,25 +88,21 @@ def analyze_text(request: PromptRequest):
         user_input = request.prompt.strip()
         
         if user_input.isdigit():
-            full_prompt = f"{SYSTEM_INSTRUCTION}\n\nUser Input (Barcode EAN/UPC): {user_input}. Identify this exact cosmetic product."
+            user_msg = f"Barcode EAN/UPC: {user_input}. Identify this exact cosmetic product."
         else:
-            full_prompt = f"{SYSTEM_INSTRUCTION}\n\nUser Input: {user_input}"
+            user_msg = user_input
         
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model=MODEL_NAME,
-            contents=full_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                max_output_tokens=500
-            )
+            messages=[
+                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                {"role": "user", "content": user_msg}
+            ],
+            response_format={"type": "json_object"}
         )
         
-        raw_text = response.text.strip()
-        if raw_text.startswith("```json"): raw_text = raw_text[7:]
-        if raw_text.startswith("```"): raw_text = raw_text[3:]
-        if raw_text.endswith("```"): raw_text = raw_text[:-3]
-            
-        return json.loads(raw_text.strip())
+        raw_text = response.choices[0].message.content.strip()
+        return json.loads(raw_text)
         
     except Exception as e:
         print(f"Error in /analyze: {str(e)}")
@@ -114,30 +112,29 @@ def analyze_text(request: PromptRequest):
 async def analyze_skin(file: UploadFile = File(...)):
     try:
         image_bytes = await file.read()
+        mime_type = file.content_type or "image/jpeg"
         
-        # Fallback MIME type if it's application/octet-stream or missing
-        mime_type = file.content_type
-        if not mime_type or mime_type == "application/octet-stream":
-            mime_type = "image/jpeg"
+        # Convert image bytes to base64 data URL for DeepSeek vision
+        b64_encoded = base64.b64encode(image_bytes).decode("utf-8")
+        image_data_url = f"data:{mime_type};base64,{b64_encoded}"
         
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model=MODEL_NAME,
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                SKIN_SYSTEM_INSTRUCTION
+            messages=[
+                {"role": "system", "content": SKIN_SYSTEM_INSTRUCTION},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Analyze this user skin image and provide the JSON evaluation."},
+                        {"type": "image_url", "image_url": {"url": image_data_url}}
+                    ]
+                }
             ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                max_output_tokens=500
-            )
+            response_format={"type": "json_object"}
         )
         
-        raw_text = response.text.strip()
-        if raw_text.startswith("```json"): raw_text = raw_text[7:]
-        if raw_text.startswith("```"): raw_text = raw_text[3:]
-        if raw_text.endswith("```"): raw_text = raw_text[:-3]
-            
-        return json.loads(raw_text.strip())
+        raw_text = response.choices[0].message.content.strip()
+        return json.loads(raw_text)
         
     except Exception as e:
         print(f"Error in /analyze-skin: {str(e)}")
